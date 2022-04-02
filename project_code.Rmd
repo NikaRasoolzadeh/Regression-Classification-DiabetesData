@@ -1,0 +1,401 @@
+
+title: "IAM557_Term Project"
+author: "Nika Rasoolzadeh"
+date: "24/01/2021"
+output: html_document
+---
+•
+## Reading the Data :
+
+In this project the \textbf{diabetes} dataset from LARS library is used. 
+
+```{r}
+                                   
+library(lars);
+data(diabetes);
+patient_data <- data.frame(cbind(diabetes$x, y = diabetes$y))
+a <- data.frame(cbind(diabetes$x2, y = diabetes$y))
+n = dim(patient_data)[1]
+
+```
+
+## Creating Train and Test sets:
+
+80%/20% random split of the original data
+
+```{r}
+set.seed(44) 
+sample_test <- sample(n, round(n/5)) 
+
+data.test <- patient_data[sample_test,]
+data.train <- patient_data[-sample_test,]
+
+```
+
+## Define Predictor Matrix and Response Vector
+```{r}
+x <- model.matrix(y ~ ., data = patient_data)[,-1]
+
+x.test <- x[sample_test,] 
+x.train <- x[-sample_test,]
+y <- patient_data$y
+y.test <- y[sample_test]
+y.train <- y[-sample_test]
+
+# Getting the train and test set sizes:
+train.size <- dim(data.train)[1] 
+test.size <- dim(data.test)[1] 
+```
+
+## Linear Regression:
+
+```{r}
+
+lm.fit <- lm(y ~ ., data = data.train) 
+summary(lm.fit)
+
+```
+
+```{r}
+par(mfrow = c(2, 2)) 
+plot(lm.fit) 
+```
+
+```{r}
+names(lm.fit)
+coef(lm.fit)
+```
+
+### Predict on test set:
+
+```{r}
+test.predict = predict(lm.fit, data.test)
+test_MSE <- mean((y.test - test.predict)^2)
+test_SE <- sd((y.test - test.predict)^2)/sqrt(test.size)
+test_MSE; test_SE
+```
+
+## Best Subsest Selection
+### Forward Stepwise:
+
+```{r}
+library(leaps)
+set.seed(22)
+regfit.fwd <- regsubsets(y ~ . , data = data.train, nvmax = 10,  method = "forward")
+regfit.fwd.summary <- summary(regfit.fwd)
+regfit.fwd.summary
+```
+
+### Forward Selection Plots
+
+```{r}
+par(mfrow = c(2, 2))
+plot(regfit.fwd.summary$cp, xlab = "Number of variables", ylab = "C_p", type = "l")
+points(which.min(regfit.fwd.summary$cp), regfit.fwd.summary$cp[which.min(regfit.fwd.summary$cp)],
+       col = "red", cex = 2, pch = 20)
+
+plot(regfit.fwd.summary$bic, xlab = "Number of variables", ylab = "BIC", type = "l")
+points(which.min(regfit.fwd.summary$bic), regfit.fwd.summary$bic[which.min(regfit.fwd.summary$bic)], col = "red", cex = 2, pch = 20)
+
+plot(regfit.fwd.summary$adjr2, xlab = "Number of variables", ylab = "Adjusted R^2", type = "l")
+points(which.max(regfit.fwd.summary$adjr2), regfit.fwd.summary$adjr2[which.max(regfit.fwd.summary$adjr2)], col = "red", cex = 2, pch = 20)
+
+mtext("Plots of Cp, BIC and adjusted R^2 for forward stepwise selection", side = 3, line = -2, outer = TRUE)
+```
+
+```{r}
+coef(regfit.fwd, which.min(regfit.fwd.summary$bic))
+```
+
+### Inference:
+
+```{r}
+# The function below is defined for regsubsets since it does not have a 
+# built in predict functin
+
+predict.regsubsets <- function(object, newdata, id,...){
+  form <- as.formula(object$call[[2]])
+  mat <- model.matrix(form, newdata)
+  cof <- coef(object, id = id)
+  xvars <- names(cof)
+  mat[, xvars]%*%cof
+}
+
+## 6 Parametered Model
+regfit.fwd.pred = predict(regfit.fwd, data.test, id = 6)
+fwd_test_MSE <- mean((y.test - regfit.fwd.pred)^2)
+fwd_test_SE <- sd((y.test - regfit.fwd.pred)^2)/sqrt(test.size)
+
+## 8 Parameter Model
+regfit.fwd.pred2 = predict(regfit.fwd, data.test, id = 8)
+fwd_test_MSE2 <- mean((y.test - regfit.fwd.pred2)^2)
+fwd_test_SE2 <- sd((y.test - regfit.fwd.pred2)^2)/sqrt(test.size)
+
+sprintf("6 predictor model test MSE: %0.3f, SE:%0.3f, 8 predictor model test MSE:%0.3f, SE:%0.3f",fwd_test_MSE,
+        fwd_test_SE, fwd_test_MSE2, fwd_test_SE2)
+```
+
+### Backward Stepwise:
+
+```{r}
+
+set.seed(33)
+regfit.bwd <- regsubsets(y ~ . , data = data.train, nvmax = 10,  method = "backward")
+regfit.bwd.summary <- summary(regfit.bwd)
+regfit.bwd.summary
+```
+
+
+### Backward Selection Plots
+
+```{r}
+par(mfrow = c(2, 2))
+plot(regfit.bwd.summary$cp, xlab = "Number of variables", ylab = "C_p", type = "l")
+points(which.min(regfit.bwd.summary$cp), regfit.bwd.summary$cp[which.min(regfit.bwd.summary$cp)],
+       col = "red", cex = 2, pch = 20)
+
+plot(regfit.bwd.summary$bic, xlab = "Number of variables", ylab = "BIC", type = "l")
+points(which.min(regfit.bwd.summary$bic), regfit.bwd.summary$bic[which.min(regfit.bwd.summary$bic)], col = "red", cex = 2, pch = 20)
+
+plot(regfit.bwd.summary$adjr2, xlab = "Number of variables", ylab = "Adjusted R^2", type = "l")
+points(which.max(regfit.bwd.summary$adjr2), regfit.bwd.summary$adjr2[which.max(regfit.bwd.summary$adjr2)], col = "red", cex = 2, pch = 20)
+
+mtext("Plots of Cp, BIC and adjusted R^2 for backward stepwise selection", side = 3, line = -2, outer = TRUE)
+```
+
+```{r}
+coef(regfit.fwd, which.min(regfit.bwd.summary$cp))
+```
+
+### Inference:
+
+```{r}
+
+## 6 Parametered Model
+regfit.bwd.pred = predict(regfit.bwd, data.test, id = 6)
+bwd_test_MSE <- mean((y.test - regfit.bwd.pred)^2)
+bwd_test_SE <- sd((y.test - regfit.bwd.pred)^2)/sqrt(test.size)
+
+## 8 Parameter Model
+regfit.bwd.pred2 = predict(regfit.bwd, data.test, id = 8)
+bwd_test_MSE2 <- mean((y.test - regfit.bwd.pred2)^2)
+bwd_test_SE2 <- sd((y.test - regfit.bwd.pred2)^2)/sqrt(test.size)
+
+sprintf("6 predictor model test MSE: %0.3f, SE:%0.3f, 8 predictor model test MSE:%0.3f, SE:%0.3f",bwd_test_MSE,
+        bwd_test_SE, bwd_test_MSE2, bwd_test_SE2)
+```
+
+
+## Lasso Regression:
+
+```{r}
+library(glmnet)
+set.seed(55)
+cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, nfolds = 10)
+plot(cv.lasso)
+
+```
+
+```{r}
+best_lambda <- cv.lasso$lambda.min
+best_lambda; log(best_lambda)
+```
+
+```{r}
+lasso.reg <- glmnet(x.train, y.train, alpha = 1, lambda = best_lambda)
+lasso.pred <- predict(lasso.reg, s = best_lambda, newx = x.test)
+coef.glmnet(lasso.reg)[1:11, ]
+```
+
+```{r}
+lasso.test_MSE <- mean((y.test - lasso.pred)^2)
+lasso.test_SE <- sd((y.test - lasso.pred)^2)/sqrt(test.size)
+lasso.MAE <- mean(abs(y.test - lasso.pred))
+sprintf("Lasso Regression test MSE: %0.3f, SE:%0.3f, MAE:%0.3f", lasso.test_MSE, lasso.test_SE, lasso.MAE)
+```
+
+## Comparing All the Results
+
+```{r}
+allmodels = data.frame(Model = c("Linear Regression Model", "Forward Selection Model with 6 predictor", "Forward Selection Model with 8 predictor", "Backward Selection Model with 6 predictor", "Backward Selection Model with 8 predictor","Lasso Model with 10 fold CV"), "Test MSE" = c(test_MSE, fwd_test_MSE, fwd_test_MSE2, bwd_test_MSE, bwd_test_MSE2, lasso.test_MSE), "test SE" = c(test_SE, fwd_test_SE, fwd_test_SE2, bwd_test_SE, bwd_test_SE2, lasso.test_SE))
+print(allmodels)
+```
+
+## Tree Based Method:
+
+```{r}
+library(tree)
+set.seed(66)
+tree.diabetes = tree(data.train$y ~. , data= data.train)
+summary(tree.diabetes)
+```
+
+
+```{r}
+plot(tree.diabetes)
+text(tree.diabetes, pretty=0)
+```
+
+### Prediction:
+```{r}
+tree.pred <- predict(tree.diabetes, newdata = data.test)
+plot(tree.pred, y.test)
+abline(0,1)
+```
+
+```{r}
+tree.MSE <- mean((tree.pred - y.test)^2)
+tree.MSE
+```
+
+### Cross Validation 
+```{r}
+cv.diabetes = cv.tree(tree.diabetes)
+plot(cv.diabetes$size, cv.diabetes$dev,type='b')
+```
+### Pruning
+```{r}
+prune.diabetes = prune.tree(tree.diabetes, best=6)
+plot(prune.diabetes)
+text(prune.diabetes, pretty=0)
+```
+```{r}
+ptree.pred <- predict(prune.diabetes, newdata = data.test)
+plot(ptree.pred, y.test)
+abline(0,1)
+```
+
+```{r}
+ptree.MSE <- mean((ptree.pred - y.test)^2)
+ptree.MSE
+```
+
+## Bagging and Random Forests:
+
+```{r}
+library(randomForest)
+set.seed(77)
+bag.diabetes = randomForest(y~.,data = data.train, mtry=10,importance=TRUE)
+bag.diabetes
+
+```
+
+```{r}
+bag.pred = predict(bag.diabetes, newdata= data.test)
+plot(bag.pred, y.test)
+abline(0,1)
+```
+
+```{r}
+bag.MSE <- mean((bag.pred - y.test)^2)
+bag.MSE
+```
+```{r}
+set.seed(1)
+rf.diabetes = randomForest(data.train$y~., data = data.train, mtry=3,importance=TRUE)
+rf.pred =  predict(rf.diabetes, newdata = data.test)
+re.MSE = mean((rf.pred-y.test)^2)
+re.MSE
+```
+```{r}
+importance(rf.diabetes)
+```
+
+```{r}
+varImpPlot(rf.diabetes)
+```
+
+## Classification:
+
+```{r}
+library(class)
+library(ggplot2)
+library(caret)
+set.seed(557)
+diab_data <- patient_data
+diab_sex = ifelse(diab_data$sex > 0, 1,0)
+diab_data$sex = as.numeric(diab_sex)
+
+m = dim(diab_data)[1]
+sampletest <- sample(m, round(m/5)) 
+
+diab_test <- diab_data[sampletest,]
+diab_train <- diab_data[-sampletest,]
+
+glm.fits = glm(factor(sex) ~. , data= diab_train ,family="binomial")
+summary(glm.fits)
+```
+
+```{r}
+
+train_pred <- predict(glm.fits, type = "response")
+train.classes <- ifelse(train_pred > 0.5 , 1, 0)
+table(train.classes, diab_train$sex)
+```
+
+```{r}
+confusionMatrix(table(train.classes, diab_train$sex))
+```
+
+```{r}
+
+test_pred <- predict(glm.fits, newdata = diab_test, type = "response")
+test.classes <- ifelse(test_pred > 0.5 , 1, 0)
+table(test.classes, diab_test$sex)
+```
+
+```{r}
+confusionMatrix(table(test.classes, diab_test$sex))
+```
+```{r}
+coef(glm.fits)
+```
+
+## KNN
+
+```{r}
+set.seed(63)
+knn.model <- knn3(factor(sex) ~. , data = diab_train, k=4)
+knn.probs <- predict(knn.model, newdata=diab_train )
+knn.classes <- as.numeric(knn.probs[,2] > 0.5)
+confusionMatrix(table(knn.classes, factor(diab_train$sex)))
+```
+
+```{r}
+knn.probs.test <- predict(knn.model, newdata=diab_test )
+knn.classes.test <- as.numeric(knn.probs.test[,2] > 0.5)
+confusionMatrix(table(knn.classes.test, factor(diab_test$sex)))
+```
+
+
+# Validation Set Approach 
+```{r}
+valid_rnos = c(2, 47 ,112 ,86 ,69 ,34, 23 ,400, 357, 96, 80, 44, 77)
+test.valid = diab_data[valid_rnos,]
+train.valid <- diab_data[-valid_rnos,]
+model <- glm(train.valid$sex ~., data = train.valid, family = binomial)
+pred <- predict(model, newdata = test.valid, type = "response")
+classes <- ifelse(pred > 0.5, 1,0)
+
+if (nrow(train.valid >1)){
+  conf.matrixv <- confusionMatrix(table(classes, test.valid$sex))
+  missclass_ratev <- as.numeric(1-conf.matrixv$overall["Accuracy"])
+} else {
+  conf.matrixv = "not defined for a single observation"
+  missclass_ratev = as.numeric(classes != test.valid$sex)
+}
+conf.matrixv
+```
+## Quadratic Linear Discriminant Analysis
+
+```{r}
+set.seed(99)
+qda.model <- qda(factor(sex) ~., data = diab_train)
+qda.model
+```
+
+```{r}
+predmodel.test.qda = predict(qda.model, newdata = diab_test)
+confusionMatrix(table(Predicted= predmodel.test.qda$class, sex=diab_test$sex))
+```
+
